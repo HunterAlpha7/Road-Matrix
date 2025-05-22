@@ -16,6 +16,10 @@ bool verticalGreen = false;
 
 float simulationSpeed = 1.0f;
 
+// Add key state flags
+bool key1Pressed = false;
+bool key2Pressed = false;
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
@@ -31,12 +35,22 @@ void processInput(GLFWwindow *window) {
         verticalGreen = !verticalGreen;
     }
 
-    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS) {
+    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS && !key1Pressed) {
         horizontalCars.push_back({-0.95f, -0.05f, 0.005f, 0});
+        key1Pressed = true;
     }
-    if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS) {
+    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_RELEASE) {
+        key1Pressed = false;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS && !key2Pressed) {
         verticalCars.push_back({-0.05f, 0.95f, 0.005f, 1});
+        key2Pressed = true;
     }
+    if (glfwGetKey(window, GLFW_KEY_2) == GLFW_RELEASE) {
+        key2Pressed = false;
+    }
+
     if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
         simulationSpeed += 0.01f;
     if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS && simulationSpeed > 0.01f)
@@ -77,14 +91,48 @@ void renderScene() {
 }
 
 void updateCars() {
-    for (auto& car : horizontalCars) {
-        if (horizontalGreen || car.x + 0.15f < -0.1f || car.x > 0.1f)
-            car.x += car.speed * simulationSpeed;
+    // Update horizontal cars
+    for (size_t i = 0; i < horizontalCars.size(); ++i) {
+        bool canMove = true;
+        // Check for collision with the car ahead
+        if (i > 0) {
+            // Assuming cars are sorted by position for simplicity
+            // If not sorted, a more complex check is needed
+            if (horizontalCars[i].x + 0.15f >= horizontalCars[i-1].x - 0.05f) { // 0.05f is the desired gap
+                canMove = false;
+            }
+        }
+
+        // Check for traffic light
+        if (!horizontalGreen && horizontalCars[i].x + 0.15f >= -0.1f && horizontalCars[i].x <= 0.1f) {
+            canMove = false;
+        }
+
+        if (canMove) {
+            horizontalCars[i].x += horizontalCars[i].speed * simulationSpeed;
+        }
     }
 
-    for (auto& car : verticalCars) {
-        if (verticalGreen || car.y > 0.1f || car.y + 0.15f < -0.1f)
-            car.y -= car.speed * simulationSpeed;
+    // Update vertical cars
+    for (size_t i = 0; i < verticalCars.size(); ++i) {
+        bool canMove = true;
+        // Check for collision with the car ahead
+        if (i > 0) {
+            // Assuming cars are sorted by position for simplicity
+            // If not sorted, a more complex check is needed
+            if (verticalCars[i].y <= verticalCars[i-1].y + 0.15f + 0.05f) { // 0.05f is the desired gap
+                canMove = false;
+            }
+        }
+
+        // Check for traffic light
+        if (!verticalGreen && verticalCars[i].y <= 0.1f && verticalCars[i].y >= -0.1f) {
+             canMove = false;
+        }
+
+        if (canMove) {
+            verticalCars[i].y -= verticalCars[i].speed * simulationSpeed;
+        }
     }
 }
 
