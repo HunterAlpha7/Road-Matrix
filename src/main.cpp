@@ -1,6 +1,8 @@
 #include <glad.h>
 #include <glfw3.h>
 #include <bits/stdc++.h>
+#include <random>
+#include <chrono>
 
 struct Car {
     float x, y;
@@ -20,6 +22,15 @@ float simulationSpeed = 1.0f;
 bool key1Pressed = false;
 bool key2Pressed = false;
 
+// Variables for random car generation
+std::mt19937 rng(std::chrono::steady_clock::now().time_since_epoch().count());
+std::uniform_real_distribution<float> spawnChanceDist(0.0f, 1.0f);
+std::uniform_int_distribution<int> carTypeDist(0, 1);
+
+double lastSpawnTime = glfwGetTime();
+double spawnInterval = 0.5; // seconds between spawn attempts
+float spawnProbability = 0.7; // probability of spawning a car when interval is met
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 }
@@ -33,22 +44,6 @@ void processInput(GLFWwindow *window) {
     }
     if (glfwGetKey(window, GLFW_KEY_N) == GLFW_PRESS) {
         verticalGreen = !verticalGreen;
-    }
-
-    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS && !key1Pressed) {
-        horizontalCars.push_back({-0.95f, -0.05f, 0.005f, 0});
-        key1Pressed = true;
-    }
-    if (glfwGetKey(window, GLFW_KEY_1) == GLFW_RELEASE) {
-        key1Pressed = false;
-    }
-
-    if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS && !key2Pressed) {
-        verticalCars.push_back({-0.05f, 0.95f, 0.005f, 1});
-        key2Pressed = true;
-    }
-    if (glfwGetKey(window, GLFW_KEY_2) == GLFW_RELEASE) {
-        key2Pressed = false;
     }
 
     if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
@@ -76,8 +71,8 @@ void renderScene() {
     drawRectangle(-0.1f, -1.0f, 0.2f, 2.0f, 0.2f, 0.2f, 0.2f); // Vertical
 
     // Draw traffic lights (larger)
-    drawRectangle(0.7f, 0.1f, 0.1f, 0.1f, horizontalGreen ? 0.0f : 1.0f, horizontalGreen ? 1.0f : 0.0f, 0.0f); // Horizontal light
-    drawRectangle(0.1f, 0.7f, 0.1f, 0.1f, verticalGreen ? 0.0f : 1.0f, verticalGreen ? 1.0f : 0.0f, 0.0f); // Vertical light
+    drawRectangle(0.3f, 0.1f, 0.1f, 0.1f, horizontalGreen ? 0.0f : 1.0f, horizontalGreen ? 1.0f : 0.0f, 0.0f); // Horizontal light
+    drawRectangle(0.1f, 0.3f, 0.1f, 0.1f, verticalGreen ? 0.0f : 1.0f, verticalGreen ? 1.0f : 0.0f, 0.0f); // Vertical light
 
     // Draw horizontal cars (larger)
     for (auto& car : horizontalCars) {
@@ -155,6 +150,21 @@ int main() {
     while (!glfwWindowShouldClose(window)) {
         processInput(window);
         updateCars();
+
+        // Random car generation logic
+        double currentTime = glfwGetTime();
+        if (currentTime - lastSpawnTime >= spawnInterval) {
+            lastSpawnTime = currentTime;
+            if (spawnChanceDist(rng) < spawnProbability) {
+                int carType = carTypeDist(rng);
+                if (carType == 0) { // Horizontal car
+                    horizontalCars.push_back({-0.95f, -0.05f, 0.005f, 0});
+                } else { // Vertical car
+                    verticalCars.push_back({-0.05f, 0.95f, 0.005f, 1});
+                }
+            }
+        }
+
         renderScene();
 
         glfwSwapBuffers(window);
