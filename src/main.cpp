@@ -4,10 +4,19 @@
 #include <random>
 #include <chrono>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 struct Car {
     float x, y;
     float speed;
     int direction; // 0 = horizontal, 1 = vertical
+};
+
+struct TextureInfo {
+    unsigned int id;
+    int width;
+    int height;
 };
 
 std::vector<Car> horizontalCars;
@@ -30,6 +39,14 @@ std::uniform_int_distribution<int> carTypeDist(0, 1);
 double lastSpawnTime = glfwGetTime();
 double spawnInterval = 0.5; // seconds between spawn attempts
 float spawnProbability = 0.7; // probability of spawning a car when interval is met
+
+// Texture IDs
+// unsigned int texture1;
+// unsigned int texture2;
+
+// Texture Info
+TextureInfo texture1Info;
+TextureInfo texture2Info;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
@@ -83,6 +100,63 @@ void renderScene() {
     for (auto& car : verticalCars) {
         drawRectangle(car.x, car.y, 0.1f, 0.15f, 0.0f, 0.0f, 1.0f);
     }
+
+    // Draw textures to the right of signal lights (maintaining aspect ratio)
+    glEnable(GL_TEXTURE_2D);
+    glColor3f(1.0f, 1.0f, 1.0f); // Set color to white for textured quads
+
+    // Draw texture 1 right of horizontal light (0.3f, 0.1f) size 0.1x0.1
+    glBindTexture(GL_TEXTURE_2D, texture1Info.id);
+    float aspectRatio1 = (float)texture1Info.width / texture1Info.height;
+    float quadWidth1, quadHeight1;
+    float targetSize = 0.2f; // Target size for the larger dimension
+
+    if (texture1Info.width > texture1Info.height) {
+        quadWidth1 = targetSize;
+        quadHeight1 = targetSize / aspectRatio1;
+    } else {
+        quadHeight1 = targetSize;
+        quadWidth1 = targetSize * aspectRatio1;
+    }
+
+    // Position centered vertically to the right of the horizontal light
+    float lightRight1 = 0.3f + 0.1f; // Right edge of horizontal light
+    float lightCenterY1 = 0.1f + 0.1f / 2.0f; // Vertical center of horizontal light
+    float quadBottomY1 = lightCenterY1 - quadHeight1 / 2.0f;
+
+    glBegin(GL_QUADS);
+        glTexCoord2f(0.0f, 1.0f); glVertex2f(lightRight1, quadBottomY1); // Bottom-left
+        glTexCoord2f(1.0f, 1.0f); glVertex2f(lightRight1 + quadWidth1, quadBottomY1); // Bottom-right
+        glTexCoord2f(1.0f, 0.0f); glVertex2f(lightRight1 + quadWidth1, quadBottomY1 + quadHeight1); // Top-right
+        glTexCoord2f(0.0f, 0.0f); glVertex2f(lightRight1, quadBottomY1 + quadHeight1); // Top-left
+    glEnd();
+
+    // Draw texture 2 right of vertical light (0.1f, 0.3f) size 0.1x0.1
+    glBindTexture(GL_TEXTURE_2D, texture2Info.id);
+    float aspectRatio2 = (float)texture2Info.width / texture2Info.height;
+    float quadWidth2, quadHeight2;
+
+    if (texture2Info.width > texture2Info.height) {
+        quadWidth2 = targetSize;
+        quadHeight2 = targetSize / aspectRatio2;
+    } else {
+        quadHeight2 = targetSize;
+        quadWidth2 = targetSize * aspectRatio2;
+    }
+
+     // Position centered vertically to the right of the vertical light
+    float lightRight2 = 0.1f + 0.1f; // Right edge of vertical light
+    float lightCenterY2 = 0.3f + 0.1f / 2.0f; // Vertical center of vertical light
+    float quadBottomY2 = lightCenterY2 - quadHeight2 / 2.0f;
+
+    glBegin(GL_QUADS);
+        glTexCoord2f(0.0f, 1.0f); glVertex2f(lightRight2, quadBottomY2); // Bottom-left
+        glTexCoord2f(1.0f, 1.0f); glVertex2f(lightRight2 + quadWidth2, quadBottomY2); // Bottom-right
+        glTexCoord2f(1.0f, 0.0f); glVertex2f(lightRight2 + quadWidth2, quadBottomY2 + quadHeight2); // Top-right
+        glTexCoord2f(0.0f, 0.0f); glVertex2f(lightRight2, quadBottomY2 + quadHeight2); // Top-left
+    glEnd();
+
+    glDisable(GL_TEXTURE_2D);
 }
 
 void updateCars() {
@@ -131,6 +205,77 @@ void updateCars() {
     }
 }
 
+// Function to load a texture (will be implemented next)
+unsigned int loadTexture(const char* filename) {
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+
+    int width, height, nrComponents;
+    unsigned char *data = stbi_load(filename, &width, &height, &nrComponents, 0);
+    if (data) {
+        GLenum format;
+        if (nrComponents == 1)
+            format = GL_RED;
+        else if (nrComponents == 3)
+            format = GL_RGB;
+        else if (nrComponents == 4)
+            format = GL_RGBA;
+
+        glBindTexture(GL_TEXTURE_2D, textureID);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        stbi_image_free(data);
+    } else {
+        std::cout << "Texture failed to load at path: " << filename << std::endl;
+        stbi_image_free(data);
+    }
+
+    return textureID;
+}
+
+// Modified loadTexture to return TextureInfo
+TextureInfo loadTextureInfo(const char* filename) {
+    TextureInfo textureInfo = {0, 0, 0};
+    glGenTextures(1, &textureInfo.id);
+
+    int width, height, nrComponents;
+    unsigned char *data = stbi_load(filename, &width, &height, &nrComponents, 0);
+    if (data) {
+        GLenum format;
+        if (nrComponents == 1)
+            format = GL_RED;
+        else if (nrComponents == 3)
+            format = GL_RGB;
+        else if (nrComponents == 4)
+            format = GL_RGBA;
+
+        glBindTexture(GL_TEXTURE_2D, textureInfo.id);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        textureInfo.width = width;
+        textureInfo.height = height;
+
+        stbi_image_free(data);
+    } else {
+        std::cout << "Texture failed to load at path: " << filename << std::endl;
+        stbi_image_free(data);
+    }
+
+    return textureInfo;
+}
+
 int main() {
     glfwInit();
     GLFWwindow* window = glfwCreateWindow(800, 600, "Traffic Simulation", NULL, NULL);
@@ -146,6 +291,13 @@ int main() {
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
+
+    // Load textures
+    // unsigned int texture1 = loadTexture("pic/Traffic-1.png"); // Assuming .png extension, adjust if needed
+    // unsigned int texture2 = loadTexture("pic/Traffic-2.png"); // Assuming .png extension, adjust if needed
+
+    texture1Info = loadTextureInfo("pic/Traffic-1.png"); // Assuming .png extension, adjust if needed
+    texture2Info = loadTextureInfo("pic/Traffic-2.png"); // Assuming .png extension, adjust if needed
 
     while (!glfwWindowShouldClose(window)) {
         processInput(window);
