@@ -30,9 +30,9 @@ bool verticalGreen = false;
 float simulationSpeed = 1.0f;
 
 // Define acceleration and deceleration rates
-// const float ACCELERATION = 0.0001f; // Increased acceleration
-// const float DECELERATION = 0.0004f; // Increased deceleration
-// const float BRAKING_DISTANCE_BUFFER = 0.2f; // Increased distance before obstacle to start braking
+const float ACCELERATION = 0.0005f; // Keep acceleration the same for now
+const float DECELERATION = 0.004f; // Increased deceleration significantly
+const float BRAKING_DISTANCE_BUFFER = 1.0f; // Increased distance before obstacle to start braking
 const float DESIRED_CAR_GAP = 0.05f; // Desired minimum gap between cars
 
 // Add key state flags
@@ -174,8 +174,8 @@ void renderScene() {
         glVertex2f(0.575f, -0.3f); glVertex2f(0.5f, -0.45f); glVertex2f(0.65f, -0.45f); // Middle triangle
     glEnd();
 
-    // Draw simple lampposts (simplified with small quads for now)
-    glColor3f(1.0f, 1.0f, 0.0f); // Yellow color for lamppost lights (simplified with small quads for now)
+    // Draw simple lampposts
+    glColor3f(1.0f, 1.0f, 0.0f); // Yellow color for lamppost lights
     glBegin(GL_QUADS);
         glVertex2f(-0.22f, 0.8f); glVertex2f(-0.16f, 0.8f); glVertex2f(-0.16f, 0.83f); glVertex2f(-0.22f, 0.83f);
         glVertex2f(0.16f, -0.8f); glVertex2f(0.22f, -0.8f); glVertex2f(0.22f, -0.83f); glVertex2f(0.16f, -0.83f);
@@ -339,30 +339,56 @@ void renderScene() {
 void updateCars() {
     // Update horizontal cars
     for (size_t i = 0; i < horizontalCars.size(); ++i) {
-        bool canMove = true;
+        Car& car = horizontalCars[i]; // Use reference for easier access
+        bool obstacleAhead = false;
+        float obstacleDistance = -1.0f; // Initialize with a value indicating no obstacle
+
         // Check for collision with the car ahead
         if (i > 0) {
-            // Collision happens if the front of the current car is at or past the back of the car ahead, minus the desired gap.
+            // Distance between the front of the current car and the back of the car ahead
             // Current horizontal car front is approximately car.x + 0.18f.
             // Horizontal car ahead back is approximately horizontalCars[i-1].x - 0.03f.
-            if (horizontalCars[i].x + 0.18f >= horizontalCars[i-1].x - 0.03f - DESIRED_CAR_GAP) { 
-                canMove = false;
+            obstacleDistance = (horizontalCars[i-1].x - 0.03f) - (car.x + 0.18f);
+            if (obstacleDistance <= DESIRED_CAR_GAP) {
+                 obstacleAhead = true;
             }
         }
 
-        // Check for traffic light
-        if (!horizontalGreen) {
-            // Stop line for horizontal cars moving right is at x = -0.1
+        // Check for traffic light if no immediate obstacle ahead
+        if (!horizontalGreen && !obstacleAhead) {
+            // Distance from the front of the car to the stop line (x = -0.1)
             // Stop if the front of the car is at or past the stop line minus the desired gap
             // Horizontal car front is approx car.x + 0.18f
-            if (horizontalCars[i].x + 0.18f >= -0.1f - DESIRED_CAR_GAP) {
-            canMove = false;
+            float stopLineDistance = (-0.1f - DESIRED_CAR_GAP) - (car.x + 0.18f);
+            if (stopLineDistance <= 0.0f) {
+                 obstacleAhead = true; // Treat stop line as an obstacle if at or past it
+            } else if (obstacleDistance == -1.0f || stopLineDistance < obstacleDistance) {
+                // If no car ahead, or stop line is closer, consider stop line distance
+                 obstacleDistance = stopLineDistance;
+                 // obstacleAhead is true if stopLineDistance <= BRAKING_DISTANCE_BUFFER (handled below)
             }
         }
 
-        if (canMove) {
-            horizontalCars[i].x += horizontalCars[i].speed * simulationSpeed;
+        // Calculate required braking distance
+        // Using a simple formula: distance = speed^2 / (2 * deceleration)
+        float requiredBrakingDistance = (car.currentSpeed * car.currentSpeed) / (2.0f * DECELERATION);
+
+        if (obstacleAhead && obstacleDistance <= requiredBrakingDistance + BRAKING_DISTANCE_BUFFER) {
+            // Decelerate if close to an obstacle or stop line
+            if (car.currentSpeed > 0.0f) {
+                 car.currentSpeed -= DECELERATION * simulationSpeed;
+                 if (car.currentSpeed < 0.0f) car.currentSpeed = 0.0f; // Cap at 0
+             }
+        } else {
+             // Accelerate if no obstacle or far enough away
+             if (car.currentSpeed < car.speed) {
+                 car.currentSpeed += ACCELERATION * simulationSpeed;
+                 if (car.currentSpeed > car.speed) car.currentSpeed = car.speed; // Cap at max speed
+             }
         }
+
+        // Update position based on current speed
+        car.x += car.currentSpeed * simulationSpeed;
     }
 
     // Remove horizontal cars that are off-screen
@@ -375,30 +401,56 @@ void updateCars() {
 
     // Update vertical cars
     for (size_t i = 0; i < verticalCars.size(); ++i) {
-        bool canMove = true;
+        Car& car = verticalCars[i]; // Use reference for easier access
+        bool obstacleAhead = false;
+        float obstacleDistance = -1.0f; // Initialize with a value indicating no obstacle
+
         // Check for collision with the car ahead
         if (i > 0) {
-            // Collision happens if the front (bottom) of the current car is at or past the back (top) of the car ahead, plus the desired gap.
+            // Distance between the front (bottom) of the current car and the back (top) of the car ahead
             // Current vertical car front (bottom) is approximately car.y - 0.15f.
             // Vertical car ahead back (top) is approximately verticalCars[i-1].y + 0.03f.
-             if (verticalCars[i].y - 0.15f <= verticalCars[i-1].y + 0.03f + DESIRED_CAR_GAP) { 
-                canMove = false;
+            obstacleDistance = (car.y - 0.15f) - (verticalCars[i-1].y + 0.03f);
+             if (obstacleDistance <= DESIRED_CAR_GAP) {
+                 obstacleAhead = true;
             }
         }
 
-        // Check for traffic light
-        if (!verticalGreen) {
+        // Check for traffic light if no immediate obstacle ahead
+        if (!verticalGreen && !obstacleAhead) {
             // Stop line for vertical cars moving down is at y = 0.1
-            // Stop if the front (bottom) of the car is at or past the stop line plus the desired gap
+            // Distance from the front (bottom) of the car to the stop line (y = 0.1)
             // Vertical car front (bottom) is approx car.y - 0.15f
-            if (verticalCars[i].y - 0.15f <= 0.1f + DESIRED_CAR_GAP) {
-             canMove = false;
+            float stopLineDistance = (car.y - 0.15f) - (0.1f + DESIRED_CAR_GAP);
+             if (stopLineDistance <= 0.0f) {
+                 obstacleAhead = true; // Treat stop line as an obstacle if at or past it
+            } else if (obstacleDistance == -1.0f || stopLineDistance < obstacleDistance) {
+                // If no car ahead, or stop line is closer, consider stop line distance
+                 obstacleDistance = stopLineDistance;
+                 // obstacleAhead is true if stopLineDistance <= BRAKING_DISTANCE_BUFFER (handled below)
             }
         }
 
-        if (canMove) {
-            verticalCars[i].y -= verticalCars[i].speed * simulationSpeed; // Negative because moving down
+        // Calculate required braking distance
+        // Using a simple formula: distance = speed^2 / (2 * deceleration)
+        float requiredBrakingDistance = (car.currentSpeed * car.currentSpeed) / (2.0f * DECELERATION);
+
+        if (obstacleAhead && obstacleDistance <= requiredBrakingDistance + BRAKING_DISTANCE_BUFFER) {
+            // Decelerate if close to an obstacle or stop line
+             if (car.currentSpeed > 0.0f) {
+                 car.currentSpeed -= DECELERATION * simulationSpeed;
+                 if (car.currentSpeed < 0.0f) car.currentSpeed = 0.0f; // Cap at 0
+             }
+        } else {
+            // Accelerate if no obstacle or far enough away
+             if (car.currentSpeed < car.speed) {
+                 car.currentSpeed += ACCELERATION * simulationSpeed;
+                 if (car.currentSpeed > car.speed) car.currentSpeed = car.speed; // Cap at max speed
+            }
         }
+
+        // Update position based on current speed
+        car.y -= car.currentSpeed * simulationSpeed; // Negative because moving down
     }
 
     // Remove vertical cars that are off-screen
@@ -518,10 +570,10 @@ int main() {
                 float randomSpeed = carSpeedDist(rng);
                 if (carType == 0) { // Horizontal car
                     // Initialize currentSpeed to 0.0f, assign random max speed
-                    horizontalCars.push_back({-0.95f, -0.05f, randomSpeed, 0.0f, 0});
+                    horizontalCars.push_back({-0.95f, -0.05f, randomSpeed, 0});
                 } else { // Vertical car
                     // Initialize currentSpeed to 0.0f, assign random max speed
-                    verticalCars.push_back({-0.05f, 0.95f, randomSpeed, 0.0f, 1});
+                    verticalCars.push_back({-0.05f, 0.95f, randomSpeed, 1});
                 }
             }
         }
