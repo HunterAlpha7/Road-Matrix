@@ -45,26 +45,10 @@ You can make the cars move faster or slower using your keyboard:
 *   Press the **Down Arrow key** to slow down the simulation.
 
 ---
-
-## 🖼️ Adding Visuals (Logo/Screenshots)
-
-To make this README visually appealing, you can add a project logo or screenshots of your simulation.
-
-1.  Place your image files (e.g., `logo.png`, `screenshot.gif`) in a directory within your project, maybe create a new one like `assets/`.
-2.  Link to them in the README using markdown image syntax. For example:
-    ```markdown
-    ![Project Logo](assets/logo.png)
-    ```
-    Or for a screenshot:
-    ```markdown
-    ![Simulation Screenshot](assets/screenshot.gif)
-    ```
-
----
-
 ## 🏃‍♀️ Running the Project
 
-(Instructions on how to compile and run the project would go here - you might need to fill this part in based on your setup, e.g., using a Makefile or specific commands.)
+g++.exe -fdiagnostics-color=always -I./include ./src/main.cpp ./src/glad.c -o ./build/main.exe -Llib -lglfw3 -lopengl32 -lgdi32
+	./build/main.exe
 
 ---
 
